@@ -1,0 +1,14 @@
+# src/web/Dockerfile.web
+
+# 1. 공식 Nginx 이미지를 사용합니다.
+FROM nginx:alpine
+
+# 2. 기존의 기본 설정을 삭제합니다.
+RUN rm /etc/nginx/conf.d/default.conf
+
+# 3. 💥 수정: 우리가 만든 nginx.conf 파일을 정확한 경로에서 복사합니다.
+COPY src/web/nginx.conf /etc/nginx/conf.d/
+
+# 4. 💥 수정: 웹 페이지 파일들을 정확한 경로에서 복사합니다.
+COPY src/web/templates/ /usr/share/nginx/html/
+COPY src/web/static/ /usr/share/nginx/html/static/

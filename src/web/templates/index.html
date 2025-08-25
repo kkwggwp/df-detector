@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAKE HUNTER</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>FAKE HUNTER</h1>
+            <p>ViT, DINO, CLIP 모델을 사용하여 이미지의 딥페이크 여부를 판별합니다.</p>
+        </header>
+
+        <main>
+            <div class="upload-section">
+                <form id="upload-form">
+                    <div class="form-group">
+                        <label for="image-upload">판별할 이미지 선택</label>
+                        <input type="file" id="image-upload" name="image" accept="image/png, image/jpeg" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="model-select">분석 모델 선택</label>
+                        <select id="model-select" name="model">
+                            <option value="ViT" selected>ViT (Vision Transformer)</option>
+                            <option value="DINO">DINO</option>
+                            <option value="CLIP">CLIP</option>
+                        </select>
+                    </div>
+                    <button type="submit" id="submit-btn">판별하기</button>
+                </form>
+                <div id="model-description">
+                    <p><strong>ViT:</strong> 이미지를 여러 조각(패치)으로 나누어 전체적인 맥락과 관계를 분석하는 데 강점이 있는 모델입니다.</p>
+                </div>
+            </div>
+
+            <div id="loading" class="hidden">
+                <div class="spinner"></div>
+                <p>모델이 이미지를 분석하고 있습니다. 잠시만 기다려주세요...</p>
+            </div>
+
+            <div id="result-section" class="hidden">
+                <h2>분석 결과</h2>
+                <div class="result-content">
+                    <div class="image-preview">
+                        <img id="uploaded-image" src="#" alt="업로드된 이미지">
+                    </div>
+                    <div class="prediction">
+                        <p id="result-text">결과: -</p>
+                        <div class="confidence-bar">
+                            <div id="confidence-fill"></div>
+                        </div>
+                        <p id="confidence-score">신뢰도: -</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p class="disclaimer">
+                <strong>주의:</strong> 본 판별 결과는 AI 모델에 의한 추정치이며 100% 정확하지 않을 수 있습니다. 참고용으로만 활용해 주시기 바랍니다. 업로드된 이미지는 7일 후 서버에서 완전히 삭제됩니다.
+            </p>
+        </footer>
+    </div>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

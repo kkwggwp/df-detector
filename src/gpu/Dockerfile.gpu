@@ -1,0 +1,20 @@
+# src/gpu/Dockerfile.gpu
+
+# 1. 베이스 이미지 선택
+FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+
+# 2. 작업 디렉토리 설정
+WORKDIR /app
+
+# 3. 💥 수정: 필요한 파일들을 정확한 경로에서 복사합니다.
+#    - requirements.gpu.txt -> 컨테이너 안에서는 requirements.txt로 이름을 변경
+COPY requirements.gpu.txt ./requirements.txt
+COPY src/gpu/models/ ./models/
+COPY model_files/ ./model_files/
+COPY src/gpu/worker.py ./
+
+# 4. 라이브러리 설치
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 5. 서버 실행
+CMD ["python", "worker.py"]

@@ -1,0 +1,184 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+
+:root {
+    --primary-color: #4a90e2;
+    --bg-color: #f4f7f6;
+    --text-color: #333;
+    --card-bg: #ffffff;
+    --border-color: #e0e0e0;
+    --real-color: #28a745;
+    --fake-color: #dc3545;
+    --ambiguous-color: #ffc107;
+}
+
+body {
+    font-family: 'Noto Sans KR', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.container {
+    width: 100%;
+    max-width: 700px;
+    background-color: var(--card-bg);
+    padding: 30px 40px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+header {
+    text-align: center;
+    margin-bottom: 30px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 20px;
+}
+
+header h1 {
+    color: var(--primary-color);
+    margin: 0;
+}
+
+.upload-section {
+    margin-bottom: 30px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+input[type="file"], select {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 16px;
+}
+
+button {
+    width: 100%;
+    padding: 15px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+button:hover {
+    background-color: #357abd;
+}
+
+#model-description {
+    margin-top: 15px;
+    padding: 15px;
+    background-color: #e9f3ff;
+    border-left: 4px solid var(--primary-color);
+    font-size: 14px;
+    border-radius: 4px;
+}
+
+#loading {
+    text-align: center;
+    padding: 40px 0;
+}
+
+.spinner {
+    border: 6px solid #f3f3f3;
+    border-top: 6px solid var(--primary-color);
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 15px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#result-section {
+    border-top: 1px solid var(--border-color);
+    padding-top: 20px;
+}
+
+.result-content {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: center;
+}
+
+.image-preview {
+    flex: 1;
+    min-width: 200px;
+}
+
+#uploaded-image {
+    max-width: 100%;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.prediction {
+    flex: 2;
+    min-width: 250px;
+}
+
+#result-text {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 15px;
+}
+
+.confidence-bar {
+    width: 100%;
+    height: 25px;
+    background-color: #e9ecef;
+    border-radius: 25px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+#confidence-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 25px;
+    transition: width 0.5s ease-in-out, background-color 0.5s;
+}
+
+/* 결과에 따른 색상 변화 */
+#confidence-fill.real { background-color: var(--real-color); }
+#confidence-fill.fake { background-color: var(--fake-color); }
+#confidence-fill.ambiguous { background-color: var(--ambiguous-color); }
+
+#confidence-score {
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.disclaimer {
+    text-align: center;
+    font-size: 12px;
+    color: #6c757d;
+    margin-top: 40px;
+}
+
+.hidden {
+    display: none;
+}
