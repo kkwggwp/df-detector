@@ -6,3 +6,7 @@ torchvision
 timm
 transformers
 open-clip-torch
+safetensors
+torch-geometric
+scipy
+sentencepiece

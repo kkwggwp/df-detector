@@ -49,7 +49,6 @@ def predict_endpoint():
 
 
 if __name__ == "__main__":
-    # 💥 중요: 서버 시작 시 모델들을 미리 로드합니다.
     print("Loading models for GPU worker...")
     load_models()
     print("Models loaded. Worker is ready.")

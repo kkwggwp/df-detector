@@ -5,6 +5,12 @@ from PIL import Image
 import timm
 from transformers import ViTForImageClassification, ViTImageProcessor
 import open_clip
+from safetensors.torch import load_file
+
+import torch.nn.functional as F
+from transformers import CLIPModel, CLIPProcessor
+from torch_geometric.nn import GCNConv, global_mean_pool
+from torch_geometric.data import Data as GeoData, Batch
 
 import os
 import random
@@ -37,19 +43,93 @@ class DinoClassifier(nn.Module):
         return self.classifier(features)
 
 
+# --- 여기에 DeepfakeGNN 클래스 전체를 추가 ---
+CLIP_DIM = 512
+PATCH_SIZE = 32
+
+
+class DeepfakeGNN(nn.Module):
+    def __init__(self, clip_model, in_dim=CLIP_DIM, hidden_dim=256):
+        super().__init__()
+        self.clip_model = clip_model
+        # CLIP 모델의 파라미터는 학습되지 않도록 고정
+        for param in self.clip_model.parameters():
+            param.requires_grad = False
+
+        self.conv1 = GCNConv(in_dim, hidden_dim)
+        self.conv2 = GCNConv(hidden_dim, hidden_dim)
+        self.fc = nn.Linear(hidden_dim, 1)
+
+    def extract_patches(self, image_tensor, patch_size=PATCH_SIZE):
+        # ... (노트북 코드와 동일) ...
+        # (이하 클래스 내용 전체를 노트북에서 복사하여 붙여넣기)
+        patches, coords = [], []
+        # image_tensor: (C, H, W)
+        C, H, W = image_tensor.shape
+        for i in range(0, H, patch_size):
+            for j in range(0, W, patch_size):
+                patch = image_tensor[:, i : i + patch_size, j : j + patch_size]
+                patches.append(patch)
+                coords.append([i, j])
+        return patches, coords
+
+    def create_graph(self, coords, threshold=1.5 * PATCH_SIZE):
+        # ... (노트북 코드와 동일) ...
+        edges = []
+        for i, (x1, y1) in enumerate(coords):
+            for j, (x2, y2) in enumerate(coords):
+                if i != j and ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5 <= threshold:
+                    edges.append([i, j])
+        return torch.tensor(edges, dtype=torch.long).t().contiguous()
+
+    def preprocess_batch_to_graphs(self, image_tensors, processor):
+        # ... (노트북 코드와 동일, processor를 인자로 받도록 수정) ...
+        data_list = []
+        device = image_tensors.device
+        for image_tensor in image_tensors:
+            patches, coords = self.extract_patches(image_tensor)
+
+            pil_patches = []
+            for p in patches:
+                # Tensor (C, H, W) to PIL Image
+                pil_patch = transforms.ToPILImage()(p.cpu())
+                pil_patches.append(pil_patch)
+
+            with torch.no_grad():
+                inputs = processor(
+                    images=pil_patches, return_tensors="pt", padding=True
+                ).to(device)
+                patch_features = self.clip_model.get_image_features(**inputs)
+
+            edge_index = self.create_graph(coords).to(device)
+            data_list.append(GeoData(x=patch_features, edge_index=edge_index))
+
+        batch_graph = Batch.from_data_list(data_list)
+        return batch_graph
+
+    def forward(self, image_tensors, processor):
+        # ... (노트북 코드와 동일, processor를 인자로 받도록 수정) ...
+        batch_graph = self.preprocess_batch_to_graphs(image_tensors, processor)
+        x, edge_index, batch = batch_graph.x, batch_graph.edge_index, batch_graph.batch
+        x = F.relu(self.conv1(x, edge_index))
+        x = F.relu(self.conv2(x, edge_index))
+        x = global_mean_pool(x, batch)
+        return self.fc(x).squeeze(-1)
+
+
 # --- 설정 ---
 
 # 모델 파일들이 저장된 경로
 MODEL_PATH_DIR = "model_files"
 MODEL_PATHS = {
     "DINO": os.path.join(MODEL_PATH_DIR, "DINO_v1.pth"),
-    "ViT": os.path.join(MODEL_PATH_DIR, "ViT_v1.pth"),
+    "ViT": os.path.join(MODEL_PATH_DIR, "ViT_v1.safetensors"),
     "CLIP": os.path.join(MODEL_PATH_DIR, "CLIP_v1.pth"),
 }
 
 # 로드된 모델, 이미지 프로세서를 저장할 딕셔너리
 MODELS = {}
-PROCESSORS = {}
+# PROCESSORS 딕셔너리는 이제 MODELS에 통합되므로 필요 없습니다. # <--- 수정됨
 
 # --- 모델 로드 함수 ---
 
@@ -74,10 +154,9 @@ def load_models():
 
             model.to(device)
             model.eval()
-            MODELS["DINO"] = {"model": model, "device": device}
 
             # DINO용 이미지 전처리기
-            PROCESSORS["DINO"] = transforms.Compose(
+            processor = transforms.Compose(
                 [
                     transforms.Resize((224, 224)),
                     transforms.ToTensor(),
@@ -86,6 +165,11 @@ def load_models():
                     ),
                 ]
             )
+            MODELS["DINO"] = {
+                "model": model,
+                "device": device,
+                "processor": processor,
+            }  # <--- 수정됨
             print(f"✅ DINO model loaded successfully from {dino_path}")
         except Exception as e:
             print(f"❗️ Error loading DINO model: {e}")
@@ -107,13 +191,18 @@ def load_models():
                 label2id={"REAL": 0, "FAKE": 1},
             )
             # 저장된 가중치를 불러옵니다.
-            model.load_state_dict(torch.load(vit_path, map_location=device))
+            state_dict = load_file(vit_path, device=device)
+            model.load_state_dict(state_dict)
             model.to(device)
             model.eval()
-            MODELS["ViT"] = {"model": model, "device": device}
 
             # ViT용 이미지 전처리기
-            PROCESSORS["ViT"] = ViTImageProcessor.from_pretrained(model_name)
+            processor = ViTImageProcessor.from_pretrained(model_name)
+            MODELS["ViT"] = {
+                "model": model,
+                "device": device,
+                "processor": processor,
+            }  # <--- 수정됨
             print(f"✅ ViT model loaded successfully from {vit_path}")
         except Exception as e:
             print(f"❗️ Error loading ViT model: {e}")
@@ -126,21 +215,24 @@ def load_models():
     clip_path = MODEL_PATHS["CLIP"]
     if os.path.exists(clip_path):
         try:
-            # CLIP 모델 구조와 이미지 전처리기를 open_clip 라이브러리에서 불러옵니다.
-            model, _, preprocess = open_clip.create_model_and_transforms(
-                "ViT-B-32", pretrained="laion2b_s34b_b79k"
-            )
-            # 모델의 classification head 부분을 노트북과 동일하게 수정
-            model.visual.head = nn.Linear(768, 2)
+            # 1. Transformers 라이브러리로 CLIP 모델과 프로세서 로드
+            clip_backbone = CLIPModel.from_pretrained(
+                "openai/clip-vit-base-patch32"
+            ).to(device)
+            processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
-            # 저장된 가중치를 불러옵니다.
+            # 2. DeepfakeGNN 모델 정의 후 state_dict 불러오기
+            model = DeepfakeGNN(clip_backbone).to(device)
             model.load_state_dict(torch.load(clip_path, map_location=device))
-            model.to(device)
             model.eval()
-            MODELS["CLIP"] = {"model": model, "device": device}
 
-            # CLIP용 이미지 전처리기
-            PROCESSORS["CLIP"] = preprocess
+            # DINO, ViT와 동일한 딕셔너리 구조로 저장합니다. # <--- 수정됨
+            MODELS["CLIP"] = {
+                "model": model,
+                "device": device,
+                "processor": processor,
+            }  # <--- 수정됨
+
             print(f"✅ CLIP model loaded successfully from {clip_path}")
         except Exception as e:
             print(f"❗️ Error loading CLIP model: {e}")
@@ -166,39 +258,40 @@ def run_prediction(image_path, model_name):
         return {"label": label, "confidence": confidence}
 
     try:
+        # --- 전체 로직을 깔끔하게 통합 --- # <--- 수정됨 (이하 로직 전체)
         model_info = MODELS[model_name]
-        model, device = model_info["model"], model_info["device"]
-        processor = PROCESSORS[model_name]
+        model = model_info["model"]
+        device = model_info["device"]
+        processor = model_info["processor"]
 
-        # 1. 이미지 로드 및 전처리
+        # 1. 이미지 로드
         image = Image.open(image_path).convert("RGB")
-
-        # 모델별로 다른 전처리 방식 적용
-        if model_name in ["DINO", "CLIP"]:
-            image_tensor = processor(image).unsqueeze(0).to(device)
-        elif model_name == "ViT":
-            inputs = processor(images=image, return_tensors="pt").to(device)
-            image_tensor = inputs["pixel_values"]
 
         # 2. 모델 추론
         with torch.no_grad():
-            if model_name == "CLIP":
-                # CLIP은 이미지 인코더 부분만 사용
-                output = model.visual(image_tensor)
-            else:  # DINO, ViT
+            if model_name == "DINO":
+                image_tensor = processor(image).unsqueeze(0).to(device)
                 output = model(image_tensor)
+                probabilities = torch.nn.functional.softmax(output, dim=1)
+                confidence = probabilities[0][1].item()
 
-            # ViT는 출력이 딕셔너리 형태일 수 있음
-            if isinstance(output, dict):
-                output = output.logits
+            elif model_name == "ViT":
+                inputs = processor(images=image, return_tensors="pt").to(device)
+                output = model(**inputs).logits
+                probabilities = torch.nn.functional.softmax(output, dim=1)
+                confidence = probabilities[0][1].item()
 
-            probabilities = torch.nn.functional.softmax(output, dim=1)
+            elif model_name == "CLIP":
+                # CLIP 모델은 입력 텐서 생성 방식이 약간 다릅니다.
+                transform = transforms.Compose(
+                    [transforms.Resize((224, 224)), transforms.ToTensor()]
+                )
+                image_tensor = transform(image).unsqueeze(0).to(device)
+                output = model(image_tensor, processor)  # forward에 processor 전달
+                prob = torch.sigmoid(output)
+                confidence = prob.item()
 
-        # 3. 결과 해석 (0: REAL, 1: FAKE 로 통일)
-        # 딥페이크(FAKE)일 확률을 confidence로 사용합니다.
-        # 노트북에서 REAL=0, FAKE=1로 라벨링 한 것을 확인했습니다.
-        confidence = probabilities[0][1].item()
-
+        # 3. 결과 해석
         if confidence > 0.7:
             label = "딥페이크"
         elif confidence < 0.3:
@@ -206,7 +299,7 @@ def run_prediction(image_path, model_name):
         else:
             label = "애매"
 
-        print(f"Prediction result: {label}, Confidence: {confidence:.2f}")
+        print(f"Prediction result: {label}, Confidence: {confidence:.4f}")
         return {"label": label, "confidence": confidence}
 
     except Exception as e:

@@ -1,7 +1,8 @@
 # src/gpu/Dockerfile.gpu
 
 # 1. 베이스 이미지 선택
-FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+# FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+FROM pytorch/pytorch:2.8.0-cuda12.9-cudnn9-runtime
 
 # 2. 작업 디렉토리 설정
 WORKDIR /app
